@@ -28,13 +28,17 @@ fn main() -> eframe::Result {
         Box::new(|cc| {
             // This gives us image support:
             egui_extras::install_image_loaders(&cc.egui_ctx);
-
-            let fs = vec!["tan(a*z + (1-a)*exp(i*0*TAU/3))".to_string(),"tan(a*z + (1-a)*exp(i*1*TAU/3))".to_string(),"tan(a*z + (1-a)*exp(i*2*TAU/3))".to_string()];
+            
+            let fs = 
+            "tan(a*z + (1-a)*exp(i*0*TAU/4)) + b*sin(c*0.5*(z + conj(z)))
+            tan(a*z + (1-a)*exp(i*1*TAU/4)) + b*sin(c*0.5*(z + conj(z)))
+            tan(a*z + (1-a)*exp(i*2*TAU/4)) + b*sin(c*0.5*(z + conj(z)))
+            tan(a*z + (1-a)*exp(i*3*TAU/4)) + b*sin(c*0.5*(z + conj(z)))";
 
             Ok(Box::<MyApp>::new(MyApp::new(
                 cc,
-                fs,
-                vec![("a".to_string(),[SliderData::default(),SliderData::default()])],
+                fs.to_string(),
+                vec![("a".to_string(),[SliderData::default(),SliderData::default()]),("b".to_string(),[SliderData::default(),SliderData::default()]),("c".to_string(),[SliderData::default(),SliderData::default()])],
                 (1000,1000),
                 Transform { 
                     translate: (SliderData::new(0.0,-1.0,1.0),SliderData::new(0.0,-1.0,1.0)),
@@ -128,6 +132,7 @@ impl Default for SliderData{
 struct MyApp {
 
     functions: Vec<String>,
+    functions_textbox: String,
     variables_vec:Vec<(String,[SliderData;2])>,
     variables_table:Variables,
     user_funcs:UserDefinedTable,
@@ -157,14 +162,14 @@ struct MyApp {
     redraw_flag: bool,
     disable_ui_flag: bool,
 
-    worker_thread: thread::JoinHandle<()>,
+    //worker_thread: thread::JoinHandle<()>,
     job_sender: mpsc::Sender<RenderJob>,
     job_result_receiver: mpsc::Receiver<IfsHistogram>,
 }
 
 impl MyApp{
     pub fn new(
-        cc:&CreationContext,functions:Vec<String>,
+        cc:&CreationContext,functions_textbox: String,
         variables_vec:Vec<(String,[SliderData;2])>,
         frame:(usize,usize),
         transform:Transform,
@@ -173,11 +178,16 @@ impl MyApp{
         export_num_iters:u64,export_resolution:(usize,usize), 
         num_threads:u32
         ) -> Self{
+        let functions:Vec<String> = functions_textbox.splitn(100,"\n").map(|s|s.to_string()).collect();
         let len = functions.len();
         let (job_sender, job_receiver) = mpsc::channel(); // FIXME: `crossbeam_channel::bounded(1)`
         let (job_result_sender, job_result_receiver) = mpsc::channel(); // FIXME: ditto
+        for string in functions.clone(){
+        println!("{string}");
+        }
         MyApp{
             functions,
+            functions_textbox,
             variables_vec,
             user_funcs: UserDefinedTable::new(),
             variables_table: Variables::new(),
@@ -202,9 +212,11 @@ impl MyApp{
 
             update_histogram_flag: true,
             redraw_flag:true,
+            high_res_snapshot_flag:true,
+            export_flag: false,
             disable_ui_flag:false,
 
-            worker_thread: thread::spawn(move || worker_thread(job_receiver, job_result_sender)),
+            //worker_thread: thread::spawn(move || worker_thread(job_receiver, job_result_sender)),
             job_sender,
             job_result_receiver,
         }
@@ -215,7 +227,7 @@ impl MyApp{
     }
 
     fn get_rotate_scale(&self) -> Complex{
-        return self.transform.scale.val * Complex::cis(self.transform.rotate.val)
+        return self.transform.scale.val * Complex::cis(self.transform.rotate.val* TAU)
     }
     
     fn get_translate(&self) -> Complex{
@@ -223,7 +235,7 @@ impl MyApp{
     }
 
     fn get_export_resolution(&self) -> (usize,usize){
-        return (self.export_resolution.0, self.export_resolution.1)
+        return (self.export_resolution.0.value, self.export_resolution.1.value)
     }
     
    
@@ -350,13 +362,20 @@ impl eframe::App for MyApp {
             
         });
         //println!("updated variables");
+        egui::SidePanel::right("textbox").show(ctx, |ui|{
+            ui.add(egui::TextEdit::multiline(&mut self.functions_textbox));
+            if ui.button("compile functions").clicked(){
+                self.functions = self.functions_textbox.splitn(100,"\n").map(|s|s.to_string()).collect();
+            }
+        });
 
         
         
         if self.update_histogram_flag{
-            let iters = if self.high_res_snapshot_flag = true {self.high_res_snapshot_iters.value} else {self.num_iters.value};
+            let iters = if self.high_res_snapshot_flag {self.high_res_snapshot_iters.value} else {self.num_iters.value};
             self.preveiw_histogram.update(&self.functions,self.get_weights(),&self.variables_table,&self.user_funcs,self.get_rotate_scale(),self.get_translate(),iters,self.num_threads);
             self.update_histogram_flag = false;
+            self.high_res_snapshot_flag = false;
         }
         if self.redraw_flag{
             self.preveiw_histogram.write_to_image(
@@ -374,8 +393,12 @@ impl eframe::App for MyApp {
             self.redraw_flag = false;
         }
         if self.export_flag{
-            self.export_histogram = IfsHistogram::new(self.export_resolution.0)
+            //self.export_histogram = IfsHistogram::new(self.export_resolution.0)
         }
+
+       
+            
+        
         //println!("updated histogram");
        
         
@@ -393,7 +416,7 @@ struct RenderJob {
     histogram: IfsHistogram,
     // TODO
 }
-
+/* 
 fn worker_thread(jobs: mpsc::Receiver<RenderJob>, job_results: mpsc::Sender<IfsHistogram>) {
     for job in jobs.iter() {
         let RenderJob { mut histogram, .. } = job;
@@ -402,3 +425,4 @@ fn worker_thread(jobs: mpsc::Receiver<RenderJob>, job_results: mpsc::Sender<IfsH
 j =  .. ,margotsih tum {} 
    }
 }
+   */

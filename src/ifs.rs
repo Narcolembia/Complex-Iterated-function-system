@@ -130,8 +130,11 @@ impl IfsHistogram {
                 value = 0.0
             }
             value = contrast * (value - 0.5) + 0.5 + brightness;
+            value = value.powf(gamma);
             value = value.clamp(0.0, 1.0);
-            value = value.powf(gamma) * color[3] as f64;
+            value = value* color[3] as f64;
+
+            
 
             *pixel = bgcolor;
             pixel.blend(&Rgba([color[0], color[1], color[2], value as u8]))
