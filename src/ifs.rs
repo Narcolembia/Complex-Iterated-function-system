@@ -18,17 +18,17 @@ pub trait ComplexIfsFunction: (Fn(&Complex, &mut ThreadRng) -> Complex) + Sync {
 impl<Func: Fn(&Complex, &mut ThreadRng) -> Complex + Sync> ComplexIfsFunction for Func {}
 
 pub struct IfsHistogram {
-    frame: (usize, usize),
+    frame: [usize;2],
     max: u64,
     histogram: Box<[AtomicU64]>,
 }
 
 impl IfsHistogram {
-    pub fn new(frame: (usize, usize)) -> Self {
+    pub fn new(frame: [u32;2]) -> Self {
         IfsHistogram {
-            frame,
+            frame: [frame[0] as usize,frame[1] as usize],
             max: 0,
-            histogram: (0 .. (frame.0 * frame.1) as u64)
+            histogram: (0 .. (frame[0] * frame[1]) as u64)
                 .into_iter()
                 .map(|_| AtomicU64::new(0))
                 .collect(),
@@ -36,26 +36,23 @@ impl IfsHistogram {
     }
 
     fn reset(&mut self) {
-        for i in 0 .. self.frame.0 * self.frame.1 {
+        for i in 0 .. self.frame[0] * self.frame[1] {
             self.histogram[i].store(0, Ordering::Relaxed);
         }
     }
 
     fn complex_to_2d_index(&self, z: &Complex) -> Option<(usize, usize)> {
-        let index: Complex = ((*z + Complex::new(1.0, 1.0)) / 2.0) * self.frame.1 as f64;
-        if index.re >= self.frame.0 as f64 ||
-            index.re < 0.0 ||
-            index.im >= self.frame.1 as f64 ||
-            index.im < 0.0
-        {
-            return None;
-        } else {
+        let index: Complex = ((*z + Complex::new(1.0, 1.0)) / 2.0) * self.frame[1] as f64;
+        if (0.0..self.frame[0] as f64).contains(&index.re) && (0.0..self.frame[1] as f64).contains(&index.im){
             return Some((index.re as usize, index.im as usize));
+        } 
+        else{
+            return None
         }
     }
 
     fn index2d_to_index1d(&self, index: (usize, usize)) -> usize {
-        return index.0 as usize + (index.1 as usize * self.frame.0);
+        return index.0 as usize + (index.1 as usize * self.frame[0]);
     }
 
     pub fn iterate_ifs(
@@ -102,15 +99,7 @@ impl IfsHistogram {
         self.max = global_max.load(Ordering::SeqCst);
     }
 
-    pub fn update(&mut self,functions:&Vec<String>, weights: Vec<f32>, variables:&Variables, user_funcs:&UserDefinedTable, rotate_scale:Complex, translate: Complex,num_iters:u64,num_threads: u32){
-        let closures:Vec<Box<dyn Fn(&[Complex]) -> Complex + Sync>>  = functions.iter().map(|f|{
-            let o:Box<dyn Fn(&[Complex]) -> Complex + Sync> = Box::new(compile(f, &["z"], variables, user_funcs).unwrap());
-            return o;
-        }
-        ).collect();
-        let ifs = ifs_from_closures(closures, weights);
-        self.iterate_ifs(&ifs, rotate_scale, translate, num_iters, num_threads);
-    }
+  
 
     pub fn write_to_image(
         &self,
