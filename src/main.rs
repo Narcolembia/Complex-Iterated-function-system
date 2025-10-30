@@ -367,7 +367,7 @@ impl eframe::App for MyApp {
             
             ui.add(egui::Label::new("Transform"));
             make_slider(ui, &mut self.transform_params.translate[0], "translate x".to_string(), Some(&mut self.flags.update_histogram_flag), Some(&mut self.flags.redraw_flag));
-            make_slider(ui, &mut self.transform_params.translate[0], "translate y".to_string(), Some(&mut self.flags.update_histogram_flag), Some(&mut self.flags.redraw_flag));
+            make_slider(ui, &mut self.transform_params.translate[1], "translate y".to_string(), Some(&mut self.flags.update_histogram_flag), Some(&mut self.flags.redraw_flag));
             make_slider(ui, &mut self.transform_params.scale, "scale".to_string() , Some(&mut self.flags.update_histogram_flag), Some(&mut self.flags.redraw_flag));
             make_slider(ui, &mut self.transform_params.rotate, "rotate".to_string(), Some(&mut self.flags.update_histogram_flag), Some(&mut self.flags.redraw_flag));
 
