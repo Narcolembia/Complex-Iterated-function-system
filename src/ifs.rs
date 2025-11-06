@@ -1,22 +1,16 @@
-use std::{
-    f64::consts::{PI, TAU},
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use eframe::egui;
 use formulac::{compile, UserDefinedTable, Variables};
 use image::{Pixel, Rgba, RgbaImage};
-use num_complex::Complex64;
-use rand::prelude::*;
+use num_complex::Complex64 as Complex;
 use rand_distr::weighted::WeightedAliasIndex;
-use rayon;
-
-type Complex = num_complex::Complex64;
+use rand::prelude::*;
 
 pub trait ComplexIfsFunction: (Fn(&Complex, &mut ThreadRng) -> Complex) + Sync {}
 
 impl<Func: Fn(&Complex, &mut ThreadRng) -> Complex + Sync> ComplexIfsFunction for Func {}
 
+#[derive(Default)]
 pub struct IfsHistogram {
     frame: [usize;2],
     max: u64,
@@ -24,6 +18,7 @@ pub struct IfsHistogram {
 }
 
 impl IfsHistogram {
+    #[track_caller]
     pub fn new(frame: [u32;2]) -> Self {
         IfsHistogram {
             frame: [frame[0] as usize,frame[1] as usize],
@@ -55,13 +50,23 @@ impl IfsHistogram {
         return index.0 as usize + (index.1 as usize * self.frame[0]);
     }
 
+
+    pub fn build_and_run_ifs(&mut self, functions_list:&Vec<String>, variables_table:&Variables, user_funcs:&UserDefinedTable, weights:Vec<f32>, rotate_scale:Complex, translate:Complex, iters:u64, num_threads:usize){
+        let mut closures:Vec<Box<dyn Fn(&[Complex]) -> Complex + Sync>> = Vec::new();
+        for function in functions_list.iter(){
+                closures.push(Box::new( compile(function.as_str(), &["z"], variables_table, user_funcs).unwrap()))
+        }
+        let ifs:Box<dyn ComplexIfsFunction> = ifs_from_closures(closures, weights);
+        self.iterate_ifs(&ifs, rotate_scale, translate, iters, num_threads);   
+    }
+
     pub fn iterate_ifs(
         &mut self,
         ifs: &Box<dyn '_ + ComplexIfsFunction>,
         rotate_scale: Complex,
         translate: Complex,
         num_iters: u64,
-        num_threads: u32,
+        num_threads: usize,
     ) {
         let iters_per_thread = (num_iters / num_threads as u64) as usize;
         let global_max: AtomicU64 = 0.into();
@@ -131,6 +136,7 @@ impl IfsHistogram {
     }
 }
 
+#[cfg(false)]
 struct Transform {
     translate: Complex,
     scale: f64,
