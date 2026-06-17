@@ -36,7 +36,7 @@ impl super::IfsEvaluator for FormulacEvaluator {
 	    Ok(())
     }
 	
-	fn eval(&mut self, params: super::EvaluationParams, extra_params: Self::ExtraParams) {
+	fn eval(&mut self, params: super::EvaluationParams, extra_params: Self::ExtraParams){
         let mut closures:Vec<Box<dyn Fn(&[Complex]) -> Complex + Sync>> = Vec::new();
 
 		let variables: Vec<_> = params.variables.iter().map(|&(ref name, val)| (name.as_str(), val)).collect();
